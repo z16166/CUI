@@ -739,7 +739,8 @@ int cui__text_field(cui_ctx *ui, cui_id id, char *buf, size_t cap, const cui_inp
     p->scroll_x = e->scroll_x; p->scroll_y = e->scroll_y;
     p->caret_phase = ui->time - ui->caret_time;
     p->font = font; p->size = size;
-    p->placeholder = o->placeholder;
+    /* Painted after the caller returns, so the placeholder has to live in the frame arena. */
+    p->placeholder = o->placeholder && o->placeholder[0] ? cui__frame_strdup(ui, o->placeholder, -1) : NULL;
     p->text = CUI_C(ui, FOREGROUND);
     p->placeholder_color = CUI_C(ui, TEXT_MUTED);
     p->caret = cui__emphasis(ui);
