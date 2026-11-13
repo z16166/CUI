@@ -562,14 +562,43 @@ static void cui__tooltip_render(cui_ctx *ui) {
 /* Dialogs and sheets                                                       */
 /* ------------------------------------------------------------------------ */
 
-typedef struct { cui_spring t; uint64_t opened; bool was_open; int z; } cui__modal_state;
+typedef struct {
+    cui_spring t;
+    uint64_t opened;
+    bool was_open;
+    int z;
+    float ox, oy;          /* dialog offset from center, in points */
+    float grab_x, grab_y;  /* pointer at the last drag sample */
+    bool dragging;
+} cui__modal_state;
+
+/* Keep the title bar on screen so a dragged dialog can still be grabbed. */
+static void cui__dialog_clamp(cui_ctx *ui, cui__modal_state *st, cui_id drag_id, float extra_ty) {
+    /* The stored rectangle is the centered layout; ox/oy are painted on top of it. */
+    cui_rect hr = cui__prev_rect(ui, drag_id);
+    if (hr.w < 1.0f || hr.h < 1.0f) return;
+    float left = hr.x + st->ox, top = hr.y + extra_ty + st->oy;
+    float right = left + hr.w, bottom = top + hr.h;
+    float pad = 8.0f;
+    float min_w = 96.0f;
+    if (right < pad + min_w) st->ox += (pad + min_w) - right;
+    if (left > ui->vw - pad - min_w) st->ox -= left - (ui->vw - pad - min_w);
+    if (top < pad) st->oy += pad - top;
+    if (bottom > ui->vh - pad) st->oy -= bottom - (ui->vh - pad);
+    if (top > ui->vh - pad - 28.0f) st->oy -= top - (ui->vh - pad - 28.0f);
+}
 
 
 static bool cui__modal_begin(cui_ctx *ui, cui_id id, const char *title, bool *open, const char *description, float width,
                              bool persistent, bool close_button, int kind, cui_side side) {
     cui__modal_state *st = cui_state(ui, id, sizeof *st);
     bool is_open = open && *open;
-    if (is_open && !st->was_open) { st->opened = ui->frame; st->z = 1000 + ++ui->layer_seq; }
+    if (is_open && !st->was_open) {
+        st->opened = ui->frame;
+        st->z = 1000 + ++ui->layer_seq;
+        st->ox = st->oy = 0;
+        st->dragging = false;
+    }
     st->was_open = is_open;
     float target = is_open ? 1.0f : 0.0f;
     if (is_open) {
@@ -626,7 +655,8 @@ static bool cui__modal_begin(cui_ctx *ui, cui_id id, const char *title, bool *op
         pn->max_h = ui->vh - 48;
         pn->opacity = t;
         pn->scale = CUI__ENTER_SCALE + (1.0f - CUI__ENTER_SCALE) * t;
-        pn->ty = (1 - t) * 10;
+        pn->tx = st->ox;
+        pn->ty = (1 - t) * 10 + st->oy;
     } else {
         bool horiz = side == CUI_SIDE_LEFT || side == CUI_SIDE_RIGHT;
         if (horiz) { pn->w = CUI_PX(CUI_MIN(width, ui->vw - 16)); pn->h = CUI_PX(ui->vh - 16); }
@@ -646,9 +676,39 @@ static bool cui__modal_begin(cui_ctx *ui, cui_id id, const char *title, bool *op
     if (!is_open) cui_push_disabled(ui, true);
     if (ui->dialog_depth < 8) ui->dialog_stack[ui->dialog_depth++] = id;
     cui_push_id_int(ui, (int)id);
-    /* header */
-    int head = cui__node_new(ui, 0);
-    ui->nodes[head].dir = CUI_ROW; ui->nodes[head].align = CUI_ALIGN_START; ui->nodes[head].gap = 12;
+    /* header: drag a dialog by its title; the close button stays a separate hit target */
+    cui_id drag_id = id ^ 0xD6A6u;
+    if (kind == 0 && is_open) {
+        cui_rect hr = cui__prev_rect(ui, drag_id);
+        float extra_ty = (1 - t) * 10;
+        float left = hr.x + st->ox, top = hr.y + extra_ty + st->oy;
+        /* the last stretch of the row is the close button, built after this */
+        bool in_title = hr.w > 1.0f && hr.h > 1.0f && ui->my >= top - 12.0f && ui->my <= top + hr.h + 4.0f &&
+                        ui->mx >= left && ui->mx <= left + hr.w - 32.0f;
+        if (in_title && ui->mpressed[0] && (ui->active == 0 || ui->active == drag_id)) ui->active = drag_id;
+        cui_interact drag = cui__interact(ui, drag_id, CUI_IF_DRAG | CUI_IF_KEEP_FOCUS);
+        if ((drag.active || ui->active == drag_id) && ui->mdown[0]) {
+            if (!st->dragging) {
+                st->dragging = true;
+                st->grab_x = ui->mx;
+                st->grab_y = ui->my;
+            }
+            st->ox += ui->mx - st->grab_x;
+            st->oy += ui->my - st->grab_y;
+            st->grab_x = ui->mx;
+            st->grab_y = ui->my;
+            cui__dialog_clamp(ui, st, drag_id, extra_ty);
+            pn->tx = st->ox;
+            pn->ty = extra_ty + st->oy;
+        } else {
+            st->dragging = false;
+        }
+        if (in_title || drag.hovered || drag.active || st->dragging) cui__set_cursor(ui, CUI_CURSOR_MOVE);
+    }
+    int head = cui__node_new(ui, kind == 0 ? drag_id : 0);
+    ui->nodes[head].dir = CUI_ROW; ui->nodes[head].align = CUI_ALIGN_CENTER; ui->nodes[head].gap = 12;
+    ui->nodes[head].w = CUI_FILL;
+    if (kind == 0) { ui->nodes[head].min_h = 28; cui__mark_interactive(ui, head, CUI_IF_DRAG); }
     cui__open(ui, head);
     int hc = cui__node_new(ui, 0);
     ui->nodes[hc].gap = 6; ui->nodes[hc].w = CUI_FILL;
