@@ -116,7 +116,9 @@ bool cui__popup_begin(cui_ctx *ui, cui_id id, cui_id anchor, int placement, floa
     n->gap = gap;
     n->flags |= CUI_NF_HIT_OPAQUE;
     if (width > 0) n->w = CUI_PX(width);
-    else if (anchor && cui__has_prev_rect(ui, anchor)) n->min_w = cui__prev_rect(ui, anchor).w;
+    /* Width 0 matches the anchor's width; a negative one sizes to the items, which is what a
+     * context menu wants: a right click on a wide row must not open a wide menu. */
+    else if (width == 0 && anchor && cui__has_prev_rect(ui, anchor)) n->min_w = cui__prev_rect(ui, anchor).w;
     n->min_w = CUI_MAX(n->min_w, menu ? 180.0f : 0.0f);
     n->max_h = 420;
     n->opacity = t;
@@ -215,7 +217,7 @@ bool cui_context_menu_begin(cui_ctx *ui, const char *id) {
         if (p) { p->at_mouse = true; p->mouse.x = ui->mx; p->mouse.y = ui->my; }
     }
     if (!cui__popup_get(ui, pid, false)) return false;
-    return cui__popup_begin(ui, pid, anchor, CUI_PLACE_BOTTOM_START, 0, 6, 0, true);
+    return cui__popup_begin(ui, pid, anchor, CUI_PLACE_BOTTOM_START, -1, 6, 0, true);
 }
 
 void cui_context_menu_end(cui_ctx *ui) { cui__popup_end(ui); }

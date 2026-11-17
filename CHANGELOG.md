@@ -6,6 +6,7 @@ What changed in CUI, newest first. Every component mentioned here runs live in t
 
 ### Added
 
+- Data grid rows are the component a `cui_context_menu` or a `cui_tooltip` hangs off, like any other control: a right click on a row opens that row's own menu, so a list can offer Copy, Rename or Delete without a separate button. See [Data grid and filter bar](docs/components-more.md#data-grid-and-filter-bar).
 - Data grid: `cui_grid_column.stretch` gives a column the width the other columns leave over, instead of the last column taking it, so a name can lead a table and still fill it. A stretching column has no resize handle, since its width is what is left. See [Data grid and filter bar](docs/components-more.md#data-grid-and-filter-bar).
 - SQL syntax colors: `.lang = "sql"` in the code block, the code editor and the diff viewer. Keywords, types and `NULL`, `TRUE` and `FALSE` match in any case, as SQL does; `--` starts a comment and `/* */` comments run across lines. The keywords cover standard SQL and common extensions such as `ilike`, `qualify`, `pivot` and `pragma` ([#33](https://github.com/yappologistic/CUI/issues/33)).
 - `cui_set_clipboard_text` and `cui_get_clipboard_text`: copy from a menu item or a status bar ("Copy path") and read the clipboard for a Paste item, through the same platform hooks the copy button and text fields use ([#32](https://github.com/yappologistic/CUI/issues/32)).
@@ -58,6 +59,7 @@ What changed in CUI, newest first. Every component mentioned here runs live in t
 
 ### Fixed
 
+- A context menu is as wide as its items, not at least as wide as the control it opens over: a right click on a full width row no longer gives a menu as wide as the list. Dropdowns that match their field still do.
 - The wheel scrolls a text area before its enclosing scroll view, then reaches the outer view at the text area's edges. Diagonal input can scroll the text vertically and the outer view horizontally.
 - Tag input enforces its tag limit for every tag in a batch.
 - Pasting a different complete one-time code emits another completion event.

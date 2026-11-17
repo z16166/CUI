@@ -1843,6 +1843,67 @@ static void test_data_grid(void) {
     cui_destroy(ui);
 }
 
+/* a context menu that hangs off a data grid row ------------------------------ */
+
+typedef struct { bool chosen; } grid_menu_ctx;
+
+static void build_grid_menu(cui_ctx *ui, void *u) {
+    grid_menu_ctx *a = u;
+    static const cui_grid_column cols[] = { { "Name", 200, CUI_TEXT_LEFT }, { "Value", 120, CUI_TEXT_RIGHT } };
+    int f, l;
+    if (cui_data_grid_begin(ui, "gm", cols, 2, 3, &f, &l, .height = CUI_PX(200))) {
+        for (int r = f; r < l; r++) {
+            cui_data_grid_row(ui, r);
+            cui_data_grid_cell_text(ui, "row");
+            cui_data_grid_cell_text(ui, "1");
+            cui_context_menu(ui, "row-menu") {
+                if (cui_menu_item(ui, "Copy")) a->chosen = true;
+            }
+        }
+        cui_data_grid_end(ui);
+    }
+}
+
+static void test_data_grid_row_menu(void) {
+    printf("data grid: a right click on a row opens the row's menu\n");
+    cui_ctx *ui = new_ctx();
+    grid_menu_ctx a = { false };
+    run(ui, build_grid_menu, &a, 2);
+    /* the header is 40 tall and rows are 40: the second row is at 80..120 */
+    cui_input_mouse_move(ui, 120, 100);
+    run(ui, build_grid_menu, &a, 1);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, true);
+    run(ui, build_grid_menu, &a, 1);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, false);
+    run(ui, build_grid_menu, &a, 2);
+    /* the menu sizes to its items, not to the row: a click far to the right of the
+     * pointer is outside it and chooses nothing */
+    click_at(ui, build_grid_menu, &a, 600, 120);
+    run(ui, build_grid_menu, &a, 1);
+    CHECK(!a.chosen);
+    /* a click on the first item does choose */
+    cui_input_mouse_move(ui, 120, 100);
+    run(ui, build_grid_menu, &a, 1);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, true);
+    run(ui, build_grid_menu, &a, 1);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, false);
+    run(ui, build_grid_menu, &a, 2);
+    click_at(ui, build_grid_menu, &a, 160, 120);
+    run(ui, build_grid_menu, &a, 1);
+    CHECK(a.chosen);
+    /* a right click on a header opens nothing */
+    a.chosen = false;
+    cui_input_mouse_move(ui, 120, 20);
+    run(ui, build_grid_menu, &a, 2);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, true);
+    run(ui, build_grid_menu, &a, 1);
+    cui_input_mouse_button(ui, CUI_MOUSE_RIGHT, false);
+    cui_input_mouse_leave(ui);
+    run(ui, build_grid_menu, &a, 1);
+    key(ui, build_grid_menu, &a, CUI_KEY_ENTER, 0);
+    CHECK(!a.chosen);
+    cui_destroy(ui);
+}
 /* a column that stretches ---------------------------------------------------- */
 
 typedef struct { cui_id grid_id, lead, tail, plain_id, plain_lead, plain_tail; } stretch_ctx;
@@ -8318,6 +8379,7 @@ int main(void) {
     test_confirm_popover_keyboard();
     test_checklist();
     test_data_grid();
+    test_data_grid_row_menu();
     test_data_grid_stretch();
     test_tree_table();
     test_tools();

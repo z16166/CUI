@@ -369,6 +369,8 @@ bool cui_data_grid_row(cui_ctx *ui, int row) {
         if (cr.hovered) cui__set_cursor(ui, CUI_CURSOR_HAND);
         cui__close(ui);
     }
+    /* the row is the component a context menu or a tooltip hangs off */
+    ui->last_id = rid;
     return clicked;
 }
 
