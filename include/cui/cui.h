@@ -1382,6 +1382,8 @@ typedef struct cui_grid_column {
     bool fixed;                /* not resizable */
     int priority;              /* 0 always shown; when the grid is too narrow, columns with a
                                 * priority hide, the highest number first, until the rest fit */
+    bool stretch;              /* takes the spare width; without one the last shown column does.
+                                * Its edge does not drag: its width is the space that is left */
 } cui_grid_column;
 typedef struct cui_grid_opts {
     int _;

@@ -1843,6 +1843,66 @@ static void test_data_grid(void) {
     cui_destroy(ui);
 }
 
+/* a column that stretches ---------------------------------------------------- */
+
+typedef struct { cui_id grid_id, lead, tail, plain_id, plain_lead, plain_tail; } stretch_ctx;
+
+static void grid_rows(cui_ctx *ui, const char *id, const cui_grid_column *cols, const char *lead_id, const char *tail_id,
+                      cui_id *lead, cui_id *tail, cui_id *grid) {
+    int f, l;
+    if (cui_data_grid_begin(ui, id, cols, 3, 1, &f, &l, .height = CUI_PX(160))) {
+        for (int r = f; r < l; r++) {
+            cui_data_grid_row(ui, r);
+            cui_data_grid_cell(ui);
+            *lead = cui_box_begin(ui, &(cui_box){ .id = lead_id, .width = CUI_FILL, .height = CUI_PX(8) });
+            cui_box_end(ui);
+            cui_data_grid_cell_text(ui, "12 MB");
+            cui_data_grid_cell(ui);
+            *tail = cui_box_begin(ui, &(cui_box){ .id = tail_id, .width = CUI_FILL, .height = CUI_PX(8) });
+            cui_box_end(ui);
+        }
+        cui_data_grid_end(ui);
+    }
+    *grid = cui_make_id(ui, id);
+}
+
+static void build_stretch(cui_ctx *ui, void *u) {
+    stretch_ctx *a = u;
+    static const cui_grid_column lead_cols[] = {
+        { "Name", 200, CUI_TEXT_LEFT, false, false, 0, true }, { "Size", 100, CUI_TEXT_RIGHT }, { "When", 120, CUI_TEXT_LEFT },
+    };
+    static const cui_grid_column plain_cols[] = {
+        { "Name", 200, CUI_TEXT_LEFT }, { "Size", 100, CUI_TEXT_RIGHT }, { "When", 120, CUI_TEXT_LEFT },
+    };
+    cui_column(ui, .pad = 0, .width = CUI_FILL, .height = CUI_FILL) {
+        grid_rows(ui, "sg1", lead_cols, "lead1", "tail1", &a->lead, &a->tail, &a->grid_id);
+        grid_rows(ui, "sg2", plain_cols, "lead2", "tail2", &a->plain_lead, &a->plain_tail, &a->plain_id);
+    }
+}
+
+static void test_data_grid_stretch(void) {
+    printf("data grid: the column that stretches takes the spare width\n");
+    cui_ctx *ui = new_ctx();
+    cui_set_viewport(ui, 1000, 800, 1);
+    stretch_ctx a;
+    memset(&a, 0, sizeof a);
+    run(ui, build_stretch, &a, 2);
+    cui_rect g = rect_of(ui, a.grid_id), lead = rect_of(ui, a.lead), tail = rect_of(ui, a.tail);
+    /* Name leads and still fills, so the fixed columns sit against the right edge */
+    CHECK(lead.w > 300);
+    CHECK_NEAR(lead.x, g.x + 13, 2);                        /* frame border and cell padding */
+    CHECK_NEAR(tail.x + tail.w + 12, g.x + g.w - 1, 2);
+    /* without the flag the spare width goes to the last column, as it always has */
+    cui_rect plain_lead = rect_of(ui, a.plain_lead), plain_tail = rect_of(ui, a.plain_tail);
+    CHECK_NEAR(plain_lead.w, 176, 2);                       /* 200 minus the cell padding */
+    CHECK(plain_tail.w > 300);
+    /* a stretch column has no drag handle: dragging its edge changes nothing */
+    drag(ui, build_stretch, &a, g.x + 13 + lead.w + 6, g.y + 20, g.x + 13 + lead.w + 90, 6);
+    run(ui, build_stretch, &a, 2);
+    CHECK_NEAR(rect_of(ui, a.lead).w, lead.w, 1);
+    cui_destroy(ui);
+}
+
 /* tree table and path bar ---------------------------------------------------- */
 
 typedef struct {
@@ -8258,6 +8318,7 @@ int main(void) {
     test_confirm_popover_keyboard();
     test_checklist();
     test_data_grid();
+    test_data_grid_stretch();
     test_tree_table();
     test_tools();
     test_hex_view();

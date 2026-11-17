@@ -25,7 +25,8 @@ struct cui_grid_build {
     float row_h, total_w, extra;
     int first, last;
     bool hidden[CUI__GRID_COLS];   /* columns hidden by priority in a narrow grid */
-    int last_col;            /* the last shown column, which takes the spare width */
+    int last_col;            /* the last shown column */
+    int stretch_col;         /* the column that takes the spare width */
     bool checks;             /* the checkbox column is shown */
     int row;                 /* current row, -1 outside */
     int col;                 /* next cell index */
@@ -35,6 +36,10 @@ struct cui_grid_build {
     bool focused;
 };
 
+/* a column's width: its own, plus the spare width when it is the one that stretches */
+static float cui__grid_col_w(const struct cui_grid_build *b, int col) {
+    return b->st->widths[col] + (col == b->stretch_col ? b->extra : 0);
+}
 
 
 typedef struct { float t, mixed; } cui__gcheck_paint;
@@ -112,7 +117,11 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
     }
     b->last_col = -1;
     for (int k = 0; k < ncols; k++) if (!b->hidden[k]) b->last_col = k;
-    /* the last column takes any spare width, so rows and header reach the edge */
+    /* the first column that asks for it takes any spare width, so rows and header reach the edge;
+     * otherwise the last one does, as it always has */
+    b->stretch_col = b->last_col;
+    for (int k = 0; k < ncols; k++)
+        if (!b->hidden[k] && cols[k].stretch) { b->stretch_col = k; break; }
     b->extra = ss->view_w > total ? ss->view_w - total : 0;
     total += b->extra;
     b->total_w = total;
@@ -232,7 +241,7 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
         int cell = cui__node_new(ui, hid);
         cui_node *cn = &ui->nodes[cell];
         cn->dir = CUI_ROW; cn->align = CUI_ALIGN_CENTER; cn->gap = 4;
-        cn->w = CUI_PX(st->widths[k] + (k == b->last_col ? b->extra : 0)); cn->h = CUI_FILL;
+        cn->w = CUI_PX(cui__grid_col_w(b, k)); cn->h = CUI_FILL;
         cn->pad[1] = cn->pad[3] = 12;
         cn->text_align = (uint8_t)c->align;
         cn->bg = cui_alpha(CUI_C(ui, HOVER), *hv);
@@ -248,7 +257,7 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
             cui__icon_node(ui, icon, 12, sorted ? CUI_C(ui, FOREGROUND) : cui_alpha(CUI_C(ui, TEXT_MUTED), 0.4f + 0.6f * *hv));
         }
         /* resize handle on the right edge */
-        if (!c->fixed) {
+        if (!c->fixed && !c->stretch) {
             cui_id rid = cui__hash(&k, sizeof k, b->id ^ 0x7E5u);
             cui_interact rr = cui__interact(ui, rid, CUI_IF_DRAG);
             if (rr.hovered && ui->mpressed[0]) { st->resizing = k; st->press_x = ui->mx; st->start_w = st->widths[k]; }
@@ -287,7 +296,7 @@ static void cui__grid_close_row(cui_ctx *ui, struct cui_grid_build *b) {
     if (!b->in_row) return;
     if (b->col > 0) cui__close(ui);
     for (; b->col < b->ncols; b->col++)
-        if (!b->hidden[b->col]) cui__leaf(ui, 0, CUI_PX(b->st->widths[b->col] + (b->col == b->last_col ? b->extra : 0)), CUI_FILL);
+        if (!b->hidden[b->col]) cui__leaf(ui, 0, CUI_PX(cui__grid_col_w(b, b->col)), CUI_FILL);
     cui_pop_id(ui);
     cui__close(ui);
     b->in_row = false;
@@ -381,7 +390,7 @@ void cui_data_grid_cell(cui_ctx *ui) {
     int cell = cui__node_new(ui, 0);
     cui_node *cn = &ui->nodes[cell];
     cn->dir = CUI_ROW; cn->align = CUI_ALIGN_CENTER; cn->gap = 8;
-    cn->w = CUI_PX(b->st->widths[b->col] + (b->col == b->last_col ? b->extra : 0)); cn->h = CUI_FILL;
+    cn->w = CUI_PX(cui__grid_col_w(b, b->col)); cn->h = CUI_FILL;
     cn->pad[1] = cn->pad[3] = 12;
     cn->text_align = (uint8_t)c->align;
     cn->flags |= CUI_NF_CLIP;

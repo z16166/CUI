@@ -6,6 +6,7 @@ What changed in CUI, newest first. Every component mentioned here runs live in t
 
 ### Added
 
+- Data grid: `cui_grid_column.stretch` gives a column the width the other columns leave over, instead of the last column taking it, so a name can lead a table and still fill it. A stretching column has no resize handle, since its width is what is left. See [Data grid and filter bar](docs/components-more.md#data-grid-and-filter-bar).
 - SQL syntax colors: `.lang = "sql"` in the code block, the code editor and the diff viewer. Keywords, types and `NULL`, `TRUE` and `FALSE` match in any case, as SQL does; `--` starts a comment and `/* */` comments run across lines. The keywords cover standard SQL and common extensions such as `ilike`, `qualify`, `pivot` and `pragma` ([#33](https://github.com/yappologistic/CUI/issues/33)).
 - `cui_set_clipboard_text` and `cui_get_clipboard_text`: copy from a menu item or a status bar ("Copy path") and read the clipboard for a Paste item, through the same platform hooks the copy button and text fields use ([#32](https://github.com/yappologistic/CUI/issues/32)).
 - `cui_app_follow_system_theme(app, follow)` starts or stops following the system's light or dark setting while the app runs, for a theme switcher with Light, Dark and System. Stopping keeps the current theme, so a `cui_set_theme` after it lasts (on macOS the system setting used to undo it every frame); starting applies the system setting at once ([#34](https://github.com/yappologistic/CUI/issues/34)).
