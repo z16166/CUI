@@ -91,7 +91,10 @@ bool cui__popup_begin(cui_ctx *ui, cui_id id, cui_id anchor, int placement, floa
         if (top && cui_key_pressed(ui, CUI_KEY_ESCAPE)) { p->open = false; ui->kpressed[CUI_KEY_ESCAPE] = 0; }
         if (ui->mpressed[0] || ui->mpressed[1]) {
             bool inside = ui->hot_layer == id || cui__layer_is_open_popup_after(ui, ui->hot_layer, p);
-            bool on_anchor = anchor && ui->hot == anchor;
+            /* A dropdown keeps its anchor as a trigger, so pressing the anchor does not close it.
+             * A context menu has no trigger: it opened at the pointer, and any press outside it,
+             * the row it hangs off included, dismisses it. */
+            bool on_anchor = anchor && ui->hot == anchor && !p->at_mouse;
             if (!inside && !on_anchor && ui->frame > p->opened_frame) p->open = false;
         }
     }

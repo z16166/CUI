@@ -59,6 +59,7 @@ What changed in CUI, newest first. Every component mentioned here runs live in t
 
 ### Fixed
 
+- A context menu opened at the pointer closes on any press outside it, the row or card it hangs off included. A dropdown keeps its trigger as a toggle.
 - A context menu is as wide as its items, not at least as wide as the control it opens over: a right click on a full width row no longer gives a menu as wide as the list. Dropdowns that match their field still do.
 - The wheel scrolls a text area before its enclosing scroll view, then reaches the outer view at the text area's edges. Diagonal input can scroll the text vertically and the outer view horizontally.
 - Tag input enforces its tag limit for every tag in a batch.

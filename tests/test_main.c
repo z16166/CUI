@@ -1881,6 +1881,10 @@ static void test_data_grid_row_menu(void) {
     click_at(ui, build_grid_menu, &a, 600, 120);
     run(ui, build_grid_menu, &a, 1);
     CHECK(!a.chosen);
+    /* and that click dismissed the menu, so the keys cannot reach an item any more */
+    key(ui, build_grid_menu, &a, CUI_KEY_DOWN, 0);
+    key(ui, build_grid_menu, &a, CUI_KEY_ENTER, 0);
+    CHECK(!a.chosen);
     /* a click on the first item does choose */
     cui_input_mouse_move(ui, 120, 100);
     run(ui, build_grid_menu, &a, 1);
