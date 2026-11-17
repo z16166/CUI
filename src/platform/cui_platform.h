@@ -57,6 +57,8 @@ const char *cui__plat_name(void);
 double cui__plat_now(void);
 int cui__plat_system_dark(void);                      /* -1 unknown, 0 light, 1 dark */
 bool cui__plat_file_dialog(cui_app *app, const cui_file_dialog_opts *o, char *out, size_t cap);
+/* Several files at once, newline separated. Returns the count, 0 on cancel. */
+int cui__plat_file_dialog_multi(cui_app *app, const cui_file_dialog_opts *o, char *out, size_t cap);
 bool cui__plat_open_url(const char *url);
 
 /* Shared helpers for backends. */

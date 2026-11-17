@@ -108,6 +108,12 @@ typedef struct cui_file_dialog_opts {
 } cui_file_dialog_opts;
 CUI_API bool cui_app_file_dialog(cui_app *app, const cui_file_dialog_opts *opts, char *out, size_t cap);
 
+/* The same dialog with multi-selection, for CUI_FILE_OPEN. Writes the chosen
+ * paths separated by a newline and returns how many there are, or 0 when the
+ * user cancels. Backends that can only ask for one file return 1. Pass a roomy
+ * buffer: eight files with full paths need a few kilobytes. */
+CUI_API int cui_app_file_dialog_multi(cui_app *app, const cui_file_dialog_opts *opts, char *out, size_t cap);
+
 /* Opens a URL or file with the system's default handler. */
 CUI_API bool cui_app_open_url(const char *url);
 

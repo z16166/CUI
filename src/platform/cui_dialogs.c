@@ -87,6 +87,81 @@ bool cui__plat_file_dialog(cui_app *app, const cui_file_dialog_opts *o, char *ou
     return WideCharToMultiByte(CP_UTF8, 0, path, -1, out, (int)cap, NULL, NULL) > 0;
 }
 
+/* A multi-select dialog hands back the directory and then the names, each one
+ * NUL terminated and the list ending with an empty string. Writes the full paths
+ * separated by newlines and returns how many there are. */
+int cui__split_selected(const WCHAR *list, char *out, size_t cap) {
+    size_t o = 0;
+    if (cap) out[0] = 0;
+    if (!list || !list[0]) return 0;
+    size_t dir_len = wcslen(list);
+    const WCHAR *second = list + dir_len + 1;
+    /* one name and nothing after it: the dialog returned a complete path */
+    if (!second[0]) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, list, -1, out, (int)cap, NULL, NULL);
+        return n > 0 ? 1 : 0;
+    }
+    int count = 0;
+    for (const WCHAR *name = second; name[0]; name += wcslen(name) + 1) {
+        WCHAR full[MAX_PATH * 4];
+        int k = swprintf(full, MAX_PATH * 4, L"%s\\%s", list, name);
+        if (k <= 0 || k >= MAX_PATH * 4) continue;
+        char utf8[MAX_PATH * 4];
+        int n = WideCharToMultiByte(CP_UTF8, 0, full, -1, utf8, (int)sizeof utf8, NULL, NULL);
+        if (n <= 0) continue;
+        size_t need = (size_t)n - 1 + (count ? 1 : 0);
+        if (o + need + 1 > cap) break;
+        if (count) out[o++] = '\n';
+        memcpy(out + o, utf8, (size_t)n - 1);
+        o += (size_t)n - 1;
+        out[o] = 0;
+        count++;
+    }
+    return count;
+}
+
+int cui__plat_file_dialog_multi(cui_app *app, const cui_file_dialog_opts *o, char *out, size_t cap) {
+    (void)app;
+    if (!out || cap == 0 || !o) return 0;
+    out[0] = 0;
+    if (o->kind != CUI_FILE_OPEN) return cui__plat_file_dialog(app, o, out, cap) ? 1 : 0;
+    HWND owner = GetActiveWindow();
+    WCHAR title[256];
+    cui__to_wide(o->title ? o->title : "Open", title, 256);
+    /* room for a few hundred files: the common dialog wants a big buffer for
+     * OFN_ALLOWMULTISELECT */
+    static WCHAR path[32768];
+    path[0] = 0;
+    if (o->default_name) cui__to_wide(o->default_name, path, 256);
+    WCHAR filter[512];
+    int n = 0;
+    bool fit = true;
+    if (o->filter && *o->filter) {
+        char spec[400];
+        size_t k = 0;
+        for (const char *p = o->filter; *p && k + 8 < sizeof spec;) {
+            const char *e = strchr(p, ';');
+            size_t l = e ? (size_t)(e - p) : strlen(p);
+            k += (size_t)snprintf(spec + k, sizeof spec - k, "%s*.%.*s", k ? ";" : "", (int)l, p);
+            p = e ? e + 1 : p + l;
+        }
+        fit = cui__w_append(filter, 511, &n, o->filter_name ? o->filter_name : "Files") && cui__w_append(filter, 511, &n, spec);
+    }
+    if (!fit) n = 0;
+    if (!cui__w_append(filter, 511, &n, "All files") || !cui__w_append(filter, 511, &n, "*.*")) n = 0;
+    filter[n] = 0;
+    OPENFILENAMEW ofn;
+    memset(&ofn, 0, sizeof ofn);
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = path;
+    ofn.nMaxFile = 32768;
+    ofn.lpstrTitle = title;
+    ofn.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT;
+    if (!GetOpenFileNameW(&ofn)) return 0;
+    return cui__split_selected(path, out, cap);
+}
 bool cui__plat_open_url(const char *url) {
     WCHAR w[4096];
     if (!cui__to_wide(url, w, 4096)) return false;
@@ -242,5 +317,12 @@ bool cui__plat_open_url(const char *url) {
 bool cui__plat_file_dialog(cui_app *app, const cui_file_dialog_opts *o, char *out, size_t cap) {
     (void)app;
     return cui__posix_file_dialog(o, out, cap);
+}
+
+/* zenity and kdialog can ask for several files, but the command lines here are
+ * built for one; asking for one is better than not offering the dialog. */
+int cui__plat_file_dialog_multi(cui_app *app, const cui_file_dialog_opts *o, char *out, size_t cap) {
+    (void)app;
+    return cui__posix_file_dialog(o, out, cap) ? 1 : 0;
 }
 #endif

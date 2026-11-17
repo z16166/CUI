@@ -311,6 +311,16 @@ bool cui_app_screenshot(cui_app *app, void *rgba, int width, int height) {
     return true;
 }
 
+/* The dialog runs its own message loop, so the window comes back with stale input
+ * state and a clock that jumped: both are reset here. */
+static void cui__after_dialog(cui_app *app) {
+    cui_input_focus(app->ui, false);   /* releases keys, buttons and modifiers */
+    cui_input_focus(app->ui, true);
+    cui_input_mouse_leave(app->ui);
+    app->last_time = cui__plat_now();
+    cui_request_redraw(app->ui);
+}
+
 bool cui_app_file_dialog(cui_app *app, const cui_file_dialog_opts *opts, char *out, size_t cap) {
     cui_file_dialog_opts d;
     memset(&d, 0, sizeof d);
@@ -319,13 +329,20 @@ bool cui_app_file_dialog(cui_app *app, const cui_file_dialog_opts *opts, char *o
     if (!out || cap == 0 || !app) return false;
     out[0] = 0;
     bool ok = cui__plat_file_dialog(app, opts, out, cap);
-    /* the dialog ran its own loop: input state is stale, and time jumped */
-    cui_input_focus(app->ui, false);   /* releases keys, buttons and modifiers */
-    cui_input_focus(app->ui, true);
-    cui_input_mouse_leave(app->ui);
-    app->last_time = cui__plat_now();
-    cui_request_redraw(app->ui);
+    cui__after_dialog(app);
     return ok && out[0];
+}
+
+int cui_app_file_dialog_multi(cui_app *app, const cui_file_dialog_opts *opts, char *out, size_t cap) {
+    cui_file_dialog_opts d;
+    memset(&d, 0, sizeof d);
+    if (!opts) opts = &d;
+    if (!app) app = cui__current_app;
+    if (!out || cap == 0 || !app) return 0;
+    out[0] = 0;
+    int count = cui__plat_file_dialog_multi(app, opts, out, cap);
+    cui__after_dialog(app);
+    return count;
 }
 
 bool cui_app_open_url(const char *url) { return url && *url && cui__plat_open_url(url); }
