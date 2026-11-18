@@ -487,6 +487,9 @@ typedef struct cui_scroll_opts {
 CUI_API void cui_scroll_begin(cui_ctx *ui, const cui_scroll_opts *opts);
 CUI_API void cui_scroll_end(cui_ctx *ui);
 CUI_API void cui_scroll_to(cui_ctx *ui, const char *scroll_id, float y);
+/* Where a scroll area sits and how tall its viewport is, as of the last frame it
+ * was drawn in. Lets a caller scroll only when what it wants is out of sight. */
+CUI_API bool cui_scroll_info(cui_ctx *ui, const char *scroll_id, float *offset, float *view);
 
 /* Resizable split view: two panes with a draggable divider. `ratio` is the
  * size of the first pane in 0..1. Call cui_split_next between the panes. */

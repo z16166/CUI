@@ -6,6 +6,7 @@ What changed in CUI, newest first. Every component mentioned here runs live in t
 
 ### Added
 
+- `cui_scroll_info`: where a scroll area sits and how tall its viewport is, so a caller can scroll only when what it wants is actually out of sight.
 - cui_app_file_dialog_multi: the open dialog with multi-selection, for an upload or an import that takes several files at once. The chosen paths come back separated by a newline, with the count as the return value; backends that can only ask for one file return one.
 - Data grid rows are the component a `cui_context_menu` or a `cui_tooltip` hangs off, like any other control: a right click on a row opens that row's own menu, so a list can offer Copy, Rename or Delete without a separate button. See [Data grid and filter bar](docs/components-more.md#data-grid-and-filter-bar).
 - Data grid: `cui_grid_column.stretch` gives a column the width the other columns leave over, instead of the last column taking it, so a name can lead a table and still fill it. A stretching column has no resize handle, since its width is what is left. See [Data grid and filter bar](docs/components-more.md#data-grid-and-filter-bar).

@@ -8338,8 +8338,40 @@ static void test_emoji_release(void) {
     CHECK(et_rgba_live == 0);
 }
 
+/* a scroll area reports where it sits and how tall it is, so a caller can scroll
+ * only when what it wants is out of sight */
+typedef struct { float pad; } scroll_info_ctx;
+static void build_scroll_info(cui_ctx *ui, void *user) {
+    scroll_info_ctx *a = user;
+    (void)a;
+    cui_scroll(ui, .id = "info-page", .height = CUI_PX(100), .width = CUI_PX(200)) {
+        for (int i = 0; i < 20; i++) cui_box(ui, .height = CUI_PX(20)) {}
+    }
+}
+
+static void test_scroll_info(void) {
+    printf("scroll: where an area sits and how tall it is\n");
+    cui_ctx *ui = new_ctx();
+    scroll_info_ctx a = { 0 };
+    run(ui, build_scroll_info, &a, 2);
+    float offset = -1, view = -1;
+    CHECK(cui_scroll_info(ui, "info-page", &offset, &view));
+    CHECK_NEAR(offset, 0, 0.01);
+    CHECK_NEAR(view, 100, 0.01);
+
+    /* after scrolling, the offset is what the area was moved to */
+    cui_scroll_to(ui, "info-page", 60);
+    run(ui, build_scroll_info, &a, 4);
+    CHECK(cui_scroll_info(ui, "info-page", &offset, &view));
+    CHECK(offset > 0.5);
+
+    /* an area that was never drawn has nothing to report */
+    CHECK(!cui_scroll_info(ui, "never-drawn", &offset, &view));
+    cui_destroy(ui);
+}
 /** Share one software renderer across the test contexts and return a failing
  * exit status to CTest if any check in the suite fails. */
+
 int main(void) {
     g_sw = cui_sw_create();
     test_color();
@@ -8383,6 +8415,7 @@ int main(void) {
     test_confirm_popover_keyboard();
     test_checklist();
     test_data_grid();
+    test_scroll_info();
     test_data_grid_row_menu();
     test_data_grid_stretch();
     test_tree_table();

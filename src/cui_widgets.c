@@ -1334,6 +1334,17 @@ void cui_scroll_to(cui_ctx *ui, const char *scroll_id, float y) {
     st->ty = y < 0 ? 0 : y;
 }
 
+bool cui_scroll_info(cui_ctx *ui, const char *scroll_id, float *offset, float *view) {
+    if (!ui || !scroll_id) return false;
+    cui_id id = cui_make_id(ui, scroll_id);
+    /* read only: no state means the area has not been drawn yet */
+    cui_scroll_state *st = cui__state_lazy(ui, id, sizeof *st, false);
+    if (!st) return false;
+    if (offset) *offset = st->y;
+    if (view) *view = st->view_h;
+    return true;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Split view                                                               */
 /* ------------------------------------------------------------------------ */

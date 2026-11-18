@@ -93,7 +93,7 @@ cui_app *cui_app_create(const cui_app_desc *desc) {
         app->screenshot_frames = f ? atoi(f) : 90;
         d->continuous = true;
     }
-    if (!d->hidden) cui__plat_show(app);
+    app->shown = false;   /* shown by the first frame, see cui_app_frame */
     cui__current_app = app;
     return app;
 }
@@ -209,6 +209,13 @@ static void cui__app_begin(cui_app *app) {
 
 bool cui_app_frame(cui_app *app) {
     if (app->in_frame) {
+        /* Show the window before painting: it stays transparent until the frame
+         * below has been presented onto it, so the first thing the compositor has
+         * to show is the app's own picture. */
+        if (!app->shown && !app->desc.hidden) {
+            app->shown = true;
+            cui__plat_show(app);
+        }
         cui__app_render(app);
         if (app->screenshot_path && ++app->frames >= app->screenshot_frames) {
             const cui_draw_data *dd = cui_get_draw_data(app->ui);

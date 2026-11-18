@@ -18,6 +18,9 @@ struct cui_app {
     bool running;
     bool in_frame;
     bool presented_once;
+    /* the window is shown once there is a frame to look at, so it never flashes
+     * blank at its default size before the app has set its geometry and theme */
+    bool shown;
     bool force_present;       /* software: the window needs the whole picture again (exposed, resized) */
     double last_time;
     double last_present;

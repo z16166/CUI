@@ -45,6 +45,8 @@ typedef struct {
     HCURSOR cursors[CUI_CURSOR_COUNT];
     cui_cursor cursor;
     bool in_size_move;
+    bool painted;          /* a frame has reached the window since it was shown */
+    bool opaque;           /* layered alpha has been raised: a frame is on the window */
     BITMAPINFO bmi;
     HANDLE timer;          /* timed waits: high resolution where Windows has it (10 1803 and later) */
 } cui__win32;
@@ -246,8 +248,25 @@ static LRESULT CALLBACK cui__win32_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         cui_request_redraw(ui);
         return 0;
     }
-    case WM_ERASEBKGND:
+    case WM_ERASEBKGND: {
+        /* Before the first picture, paint the theme's own background instead of
+         * leaving the window to the system, which shows white on the way to a dark
+         * theme. Once a frame is up, leave the window alone: a fill here would wipe
+         * the picture the renderer put on it. */
+        if (!w || !w->painted) {
+            HDC dc = (HDC)wp;
+            const cui_draw_data *dd = cui_get_draw_data(ui);
+            cui_color bg = dd ? dd->clear_color : (cui_color){ 0, 0, 0, 255 };
+            RECT r;
+            GetClientRect(hwnd, &r);
+            HBRUSH brush = CreateSolidBrush(RGB(bg.r, bg.g, bg.b));
+            if (brush) {
+                FillRect(dc, &r, brush);
+                DeleteObject(brush);
+            }
+        }
         return 1;
+    }
     case WM_DPICHANGED: {
         if (w) w->scale = (float)HIWORD(wp) / 96.0f;
         RECT *r = (RECT *)lp;
@@ -387,9 +406,12 @@ bool cui__plat_init(cui_app *app) {
     WCHAR title[256];
     MultiByteToWideChar(CP_UTF8, 0, app->title, -1, title, 256);
     app->plat = w;
-    w->hwnd = CreateWindowExW(0, wc.lpszClassName, title, style, CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
+    w->hwnd = CreateWindowExW(WS_EX_LAYERED, wc.lpszClassName, title, style, CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
                               NULL, NULL, inst, app);
     if (!w->hwnd) { free(w); app->plat = NULL; return false; }
+    /* invisible until the first frame lands: the compositor would otherwise show
+     * its blank surface for a frame, which reads as a white flash on a dark theme */
+    SetLayeredWindowAttributes(w->hwnd, 0, 0, LWA_ALPHA);
     DragAcceptFiles(w->hwnd, TRUE);   /* files dropped from Explorer arrive as WM_DROPFILES */
     w->scale = cui__win32_window_scale(w->hwnd);
     if (w->scale != scale) {
@@ -415,9 +437,22 @@ bool cui__plat_init(cui_app *app) {
     return true;
 }
 
+/* A frame is on the window: let the compositor show it. */
+static void cui__win32_reveal(cui__win32 *w) {
+    if (w->opaque) return;
+    w->opaque = true;
+    SetLayeredWindowAttributes(w->hwnd, 0, 255, LWA_ALPHA);
+}
+
 void cui__plat_show(cui_app *app) {
     cui__win32 *w = cui__w(app);
-    ShowWindow(w->hwnd, SW_SHOWDEFAULT);
+    /* The window is empty until a frame lands on it, so the background has to be
+     * painted in the theme's colour until then, not left to the system. */
+    w->painted = false;
+    /* SW_SHOW rather than SW_SHOWDEFAULT: the app may have restored a placement
+     * (maximized, moved) while the window was hidden, and the startup command
+     * would undo it. */
+    ShowWindow(w->hwnd, SW_SHOW);
     UpdateWindow(w->hwnd);
 }
 
@@ -473,7 +508,11 @@ bool cui__plat_gl_create(cui_app *app, bool vsync) {
     return true;
 }
 
-void cui__plat_gl_swap(cui_app *app) { SwapBuffers(cui__w(app)->hdc); }
+void cui__plat_gl_swap(cui_app *app) {
+    SwapBuffers(cui__w(app)->hdc);
+    cui__w(app)->painted = true;
+    cui__win32_reveal(cui__w(app));
+}
 
 void cui__plat_present(cui_app *app, const void *bgra, int width, int height, int stride) {
     cui__win32 *w = cui__w(app);
@@ -486,6 +525,8 @@ void cui__plat_present(cui_app *app, const void *bgra, int width, int height, in
     bmi->bmiHeader.biBitCount = 32;
     bmi->bmiHeader.biCompression = BI_RGB;
     SetDIBitsToDevice(w->hdc, 0, 0, (DWORD)width, (DWORD)height, 0, 0, 0, (UINT)height, bgra, bmi, DIB_RGB_COLORS);
+    w->painted = true;
+    cui__win32_reveal(w);
 }
 
 void cui__plat_metrics(cui_app *app, float *wpt, float *hpt, float *scale, int *fb_w, int *fb_h) {
