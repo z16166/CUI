@@ -47,7 +47,6 @@ typedef struct {
     bool in_size_move;
     bool painted;          /* a frame has reached the window since it was shown */
     bool opaque;           /* layered alpha has been raised: a frame is on the window */
-    int presents;          /* frames presented since the window was shown */
     BITMAPINFO bmi;
     HANDLE timer;          /* timed waits: high resolution where Windows has it (10 1803 and later) */
 } cui__win32;
@@ -438,13 +437,9 @@ bool cui__plat_init(cui_app *app) {
     return true;
 }
 
-/* A frame is on the window: let the compositor show it. The second one counts,
- * because the first is built before the layout has told its parts how wide they
- * are, so a grid's trailing columns are still a frame away from where they end
- * up. Showing that frame would read as the headers jumping to the left. */
+/* A frame is on the window: let the compositor show it. */
 static void cui__win32_reveal(cui__win32 *w) {
     if (w->opaque) return;
-    if (++w->presents < 2) return;
     w->opaque = true;
     SetLayeredWindowAttributes(w->hwnd, 0, 255, LWA_ALPHA);
 }
@@ -454,7 +449,6 @@ void cui__plat_show(cui_app *app) {
     /* The window is empty until a frame lands on it, so the background has to be
      * painted in the theme's colour until then, not left to the system. */
     w->painted = false;
-    w->presents = 0;
     /* SW_SHOW rather than SW_SHOWDEFAULT: the app may have restored a placement
      * (maximized, moved) while the window was hidden, and the startup command
      * would undo it. */

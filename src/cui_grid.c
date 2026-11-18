@@ -22,7 +22,7 @@ struct cui_grid_build {
     int ncols, nrows;
     cui_grid_opts o;
     cui__grid_state *st;
-    float row_h, total_w, extra;
+    float row_h, total_w;
     int first, last;
     bool hidden[CUI__GRID_COLS];   /* columns hidden by priority in a narrow grid */
     int last_col;            /* the last shown column */
@@ -36,9 +36,11 @@ struct cui_grid_build {
     bool focused;
 };
 
-/* a column's width: its own, plus the spare width when it is the one that stretches */
-static float cui__grid_col_w(const struct cui_grid_build *b, int col) {
-    return b->st->widths[col] + (col == b->stretch_col ? b->extra : 0);
+/* a column's width, in the terms the layout takes: the stretching column fills what
+ * the others leave, in the same frame, so nothing has to be measured a frame ahead */
+static cui_size cui__grid_col_w(const struct cui_grid_build *b, int col) {
+    if (col == b->stretch_col) return CUI_FILL;
+    return CUI_PX(b->st->widths[col]);
 }
 
 
@@ -122,8 +124,8 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
     b->stretch_col = b->last_col;
     for (int k = 0; k < ncols; k++)
         if (!b->hidden[k] && cols[k].stretch) { b->stretch_col = k; break; }
-    b->extra = ss->view_w > total ? ss->view_w - total : 0;
-    total += b->extra;
+    /* the widths the columns ask for: what the content is at least, so a narrow frame
+     * scrolls sideways instead of squeezing the stretching column to nothing */
     b->total_w = total;
     float view_h = ss->view_h > 0 ? ss->view_h : 400;
     int f = (int)floorf((ss->y - CUI__GRID_HEAD) / b->row_h) - 2;
@@ -189,21 +191,22 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
     sb.width = CUI_FILL; sb.height = CUI_FILL;
     cui__scroll_begin_ex(ui, b->sid, &sb, true);
     int content = cui__node_new(ui, 0);
-    ui->nodes[content].w = CUI_PX(total);
+    ui->nodes[content].w = CUI_FILL;
+    ui->nodes[content].min_w = total;   /* points: the widths the columns ask for */
     ui->nodes[content].gap = 0;
     cui__open(ui, content);
     /* sticky header: laid out at the top of the content, pushed down by the scroll offset. The
      * offset sits on a holder of no height: a node is culled by its rect before its own offset
      * applies, and one of no height never is, so the header stays drawn and clickable */
     int hold = cui__node_new(ui, 0);
-    ui->nodes[hold].w = CUI_PX(total); ui->nodes[hold].h = CUI_PX(0);
+    ui->nodes[hold].w = CUI_FILL; ui->nodes[hold].h = CUI_PX(0);
     ui->nodes[hold].ty = ss->y;
     ui->nodes[hold].flags |= CUI_NF_ON_TOP;
     cui__open(ui, hold);
     int head = cui__node_new(ui, b->id ^ 0x4EADu);
     cui_node *hn = &ui->nodes[head];
     hn->dir = CUI_ROW; hn->align = CUI_ALIGN_CENTER;
-    hn->h = CUI_PX(CUI__GRID_HEAD); hn->w = CUI_PX(total);
+    hn->h = CUI_PX(CUI__GRID_HEAD); hn->w = CUI_FILL;
     hn->bg = CUI_C(ui, SURFACE_MUTED);
     /* the header's fill follows the frame's top corners instead of poking past them */
     { float ir = CUI_MAX(0.0f, ui->theme.radius_control - 1); hn->radius = (cui_corners){ ss->x > 0.5f ? 0 : ir, ir, 0, 0 }; }
@@ -241,7 +244,7 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
         int cell = cui__node_new(ui, hid);
         cui_node *cn = &ui->nodes[cell];
         cn->dir = CUI_ROW; cn->align = CUI_ALIGN_CENTER; cn->gap = 4;
-        cn->w = CUI_PX(cui__grid_col_w(b, k)); cn->h = CUI_FILL;
+        cn->w = cui__grid_col_w(b, k); cn->h = CUI_FILL;
         cn->pad[1] = cn->pad[3] = 12;
         cn->text_align = (uint8_t)c->align;
         cn->bg = cui_alpha(CUI_C(ui, HOVER), *hv);
@@ -285,8 +288,8 @@ bool cui_data_grid_begin_ex(cui_ctx *ui, const char *id_str, const cui_grid_colu
     cui_pop_id(ui);
     cui__close(ui);   /* header */
     cui__close(ui);   /* holder */
-    cui__leaf(ui, 0, CUI_PX(total), CUI_PX(CUI__GRID_HEAD));   /* the header's place */
-    if (f > 0) cui__leaf(ui, 0, CUI_PX(total), CUI_PX(f * b->row_h));
+    cui__leaf(ui, 0, CUI_FILL, CUI_PX(CUI__GRID_HEAD));   /* the header's place */
+    if (f > 0) cui__leaf(ui, 0, CUI_FILL, CUI_PX(f * b->row_h));
     if (b->focused) cui__focus_ring(ui, outer, ui->focus_visible ? 1.0f : 0.0f);
     ui->building.grid = b;
     return true;
@@ -296,7 +299,7 @@ static void cui__grid_close_row(cui_ctx *ui, struct cui_grid_build *b) {
     if (!b->in_row) return;
     if (b->col > 0) cui__close(ui);
     for (; b->col < b->ncols; b->col++)
-        if (!b->hidden[b->col]) cui__leaf(ui, 0, CUI_PX(cui__grid_col_w(b, b->col)), CUI_FILL);
+        if (!b->hidden[b->col]) cui__leaf(ui, 0, cui__grid_col_w(b, b->col), CUI_FILL);
     cui_pop_id(ui);
     cui__close(ui);
     b->in_row = false;
@@ -337,7 +340,7 @@ bool cui_data_grid_row(cui_ctx *ui, int row) {
     int n = cui__node_new(ui, rid);
     cui_node *rn = &ui->nodes[n];
     rn->dir = CUI_ROW; rn->align = CUI_ALIGN_CENTER;
-    rn->h = CUI_PX(b->row_h); rn->w = CUI_PX(b->total_w);
+    rn->h = CUI_PX(b->row_h); rn->w = CUI_FILL;
     cui_color bg = cui__rgba(0, 0, 0, 0);
     if (b->o.striped && (row & 1)) bg = cui_alpha(CUI_C(ui, FOREGROUND), 0.02f);
     bg = cui_mix(bg, CUI_C(ui, HOVER), *hv);
@@ -392,7 +395,7 @@ void cui_data_grid_cell(cui_ctx *ui) {
     int cell = cui__node_new(ui, 0);
     cui_node *cn = &ui->nodes[cell];
     cn->dir = CUI_ROW; cn->align = CUI_ALIGN_CENTER; cn->gap = 8;
-    cn->w = CUI_PX(cui__grid_col_w(b, b->col)); cn->h = CUI_FILL;
+    cn->w = cui__grid_col_w(b, b->col); cn->h = CUI_FILL;
     cn->pad[1] = cn->pad[3] = 12;
     cn->text_align = (uint8_t)c->align;
     cn->flags |= CUI_NF_CLIP;
@@ -477,7 +480,7 @@ void cui_data_grid_end(cui_ctx *ui) {
     struct cui_grid_build *b = ui->building.grid;
     if (!b) return;
     cui__grid_close_row(ui, b);
-    if (b->last < b->nrows) cui__leaf(ui, 0, CUI_PX(b->total_w), CUI_PX((b->nrows - b->last) * b->row_h));
+    if (b->last < b->nrows) cui__leaf(ui, 0, CUI_FILL, CUI_PX((b->nrows - b->last) * b->row_h));
     if (b->nrows == 0) {
         int e = cui__node_new(ui, 0);
         ui->nodes[e].w = CUI_FILL; ui->nodes[e].pad[0] = ui->nodes[e].pad[2] = 36;

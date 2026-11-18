@@ -1966,6 +1966,21 @@ static void test_data_grid_stretch(void) {
     run(ui, build_stretch, &a, 2);
     CHECK_NEAR(rect_of(ui, a.lead).w, lead.w, 1);
     cui_destroy(ui);
+
+    /* the spare width is the layout's business, so the very first frame already has
+     * it: nothing here is measured a frame ahead */
+    cui_ctx *fresh = new_ctx();
+    cui_set_viewport(fresh, 1000, 800, 1);
+    stretch_ctx f;
+    memset(&f, 0, sizeof f);
+    run(fresh, build_stretch, &f, 1);
+    cui_rect fg = rect_of(fresh, f.grid_id), flead = rect_of(fresh, f.lead), ftail = rect_of(fresh, f.tail);
+    CHECK(flead.w > 300);                                   /* stretched on frame one */
+    CHECK_NEAR(flead.x, fg.x + 13, 2);
+    CHECK_NEAR(ftail.x + ftail.w + 12, fg.x + fg.w - 1, 2);
+    CHECK_NEAR(rect_of(fresh, f.plain_lead).w, 176, 2);     /* the last column still takes it */
+    CHECK(rect_of(fresh, f.plain_tail).w > 300);
+    cui_destroy(fresh);
 }
 
 /* tree table and path bar ---------------------------------------------------- */
